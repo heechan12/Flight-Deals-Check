@@ -1,0 +1,76 @@
+name: 항공 특가 알림 체크
+
+on:
+  schedule:
+    # 4시간마다 실행 (KST 기준: 01, 05, 09, 13, 17, 21시)
+    - cron: '0 */4 * * *'
+  workflow_dispatch:  # 수동 실행 버튼
+    inputs:
+      dry_run:
+        description: '이메일 발송 없이 딜만 확인 (dry-run)'
+        required: false
+        default: 'false'
+        type: boolean
+      force_notify:
+        description: '기존 seen_deals 무시하고 전체 발송'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: write  # seen_deals.json 커밋을 위해 필요
+
+jobs:
+  check-deals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python 3.12 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 패키지 설치
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: 특가 딜 확인 (일반 스케줄)
+        if: github.event_name == 'schedule'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          GMAIL_TO: ${{ secrets.GMAIL_TO }}
+        run: python main.py
+
+      - name: 특가 딜 확인 (수동 실행)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          GMAIL_TO: ${{ secrets.GMAIL_TO }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ github.event.inputs.force_notify }}" = "true" ]; then
+            ARGS="$ARGS --force-notify"
+          fi
+          python main.py $ARGS
+
+      - name: seen_deals.json 커밋 및 푸시
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/seen_deals.json
+          # 변경이 있을 때만 커밋
+          git diff --staged --quiet || git commit -m "chore: update seen deals [skip ci]"
+          git push
