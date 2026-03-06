@@ -17,16 +17,38 @@ from pathlib import Path
 
 from scrapers.korean_air import KoreanAirScraper
 from scrapers.asiana import AsianaScraper
+from scrapers.jinair import JinAirScraper
+from scrapers.jejuair import JejuAirScraper
+from scrapers.tway import TWayScraper
 from scrapers.interpark import InterparkScraper
+from scrapers.hanatour import HanatourScraper
+from scrapers.myrealtrip import MyrealtripScraper
+from scrapers.tripdotcom import TripdotcomScraper
+from scrapers.agoda import AgodaScraper
+from scrapers.skyscanner import SkyscannerScraper
+from scrapers.modetour import ModetourScraper
+from scrapers.norang import NorangScraper
 from notifiers.email_notifier import EmailNotifier
 
 SEEN_DEALS_FILE = Path("data/seen_deals.json")
 
 # 활성화할 스크래퍼 목록 (주석 처리로 비활성화 가능)
 SCRAPERS = [
+    # 항공사
     KoreanAirScraper(),
     AsianaScraper(),
+    JinAirScraper(),
+    JejuAirScraper(),
+    TWayScraper(),
+    # 여행사 + 예약 플랫폼
     InterparkScraper(),
+    HanatourScraper(),
+    MyrealtripScraper(),
+    TripdotcomScraper(),
+    AgodaScraper(),
+    SkyscannerScraper(),
+    ModetourScraper(),
+    NorangScraper(),
 ]
 
 

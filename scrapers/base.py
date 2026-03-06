@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, field as dc_field
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
+import httpx
+from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, BrowserContext
 
 
@@ -94,3 +97,82 @@ class BaseScraper:
 
     def _make_deal(self, **kwargs) -> Deal:
         return Deal(source=self.name, **kwargs)
+
+
+_RSS_BASE = "https://news.google.com/rss/search"
+_RSS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+}
+_COMMON_EXCLUDE = ["사고", "추락", "결항", "지연", "파업", "소송", "사망"]
+_AIRLINE_INCLUDE = ["특가", "할인", "프로모션", "이벤트", "세일", "SALE"]
+_TRAVEL_INCLUDE  = ["특가", "할인", "프로모션", "이벤트", "세일", "SALE", "패키지", "단독"]
+
+
+class NewsRssScraper(BaseScraper):
+    """
+    Google News RSS 기반 공통 스크래퍼.
+
+    서브클래스에서 name, rss_query, include_keywords 만 지정하면 됩니다.
+
+    예:
+        class JinAirScraper(NewsRssScraper):
+            name = "진에어"
+            rss_query = "진에어+특가+항공권"
+    """
+    rss_query: str = ""
+    max_age_days: int = 30
+    exclude_keywords: list[str] = _COMMON_EXCLUDE
+    include_keywords: list[str] = _AIRLINE_INCLUDE
+
+    async def scrape(self) -> list[Deal]:
+        url = f"{_RSS_BASE}?q={self.rss_query}&hl=ko&gl=KR&ceid=KR:ko"
+        deals: list[Deal] = []
+        try:
+            async with httpx.AsyncClient(headers=_RSS_HEADERS, follow_redirects=True, timeout=15) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, "lxml-xml")
+            items = soup.find_all("item")
+
+            for item in items:
+                title   = item.find("title")
+                link    = item.find("link")
+                pub_date = item.find("pubDate")
+                source  = item.find("source")
+
+                if not title or not link:
+                    continue
+
+                title_text = title.text.strip()
+                link_text  = link.text.strip() if link.text else ""
+
+                if any(kw in title_text for kw in self.exclude_keywords):
+                    continue
+                if not any(kw in title_text for kw in self.include_keywords):
+                    continue
+
+                if pub_date:
+                    try:
+                        pub_dt = parsedate_to_datetime(pub_date.text)
+                        if pub_dt.tzinfo is None:
+                            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) - pub_dt > timedelta(days=self.max_age_days):
+                            continue
+                    except Exception:
+                        pass
+
+                source_name = source.text.strip() if source else ""
+                deals.append(self._make_deal(
+                    title=title_text,
+                    url=link_text,
+                    deadline=pub_date.text.strip()[:16] if pub_date else None,
+                    extra=f"출처: {source_name}" if source_name else None,
+                ))
+
+            print(f"[{self.name}] {len(deals)}개 딜 발견 (RSS {len(items)}개 중 필터링)")
+        except Exception as e:
+            print(f"[{self.name}] 스크래핑 오류: {e}")
+
+        return deals
