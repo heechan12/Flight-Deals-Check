@@ -29,6 +29,7 @@ from scrapers.skyscanner import SkyscannerScraper
 from scrapers.modetour import ModetourScraper
 from scrapers.norang import NorangScraper
 from notifiers.email_notifier import EmailNotifier
+from notifiers.notion_notifier import NotionNotifier
 
 SEEN_DEALS_FILE = Path("data/seen_deals.json")
 
@@ -128,6 +129,15 @@ async def run(dry_run: bool = False, force_notify: bool = False) -> None:
         to_email=gmail_to,
     )
     notifier.send(new_deals, seen_deals)
+
+    # Notion 등록 (선택적 - 환경변수 없으면 건너뜀)
+    notion_key = os.environ.get("NOTION_API_KEY")
+    notion_db  = os.environ.get("NOTION_DATABASE_ID")
+    if notion_key and notion_db:
+        notion = NotionNotifier(api_key=notion_key, database_id=notion_db)
+        await notion.add_deals(new_deals, seen_deals)
+    else:
+        print("[Notion] 환경변수 미설정 - 건너뜀")
 
     # seen_deals 업데이트
     seen_ids.update(d.id for d in new_deals)
