@@ -91,9 +91,10 @@ async def run(dry_run: bool = False, force_notify: bool = False) -> None:
 
     # 새 딜 필터링
     seen_ids = load_seen_ids() if not force_notify else set()
-    new_deals = [d for d in all_deals if d.id not in seen_ids]
+    new_deals  = [d for d in all_deals if d.id not in seen_ids]
+    seen_deals = [d for d in all_deals if d.id in seen_ids]
 
-    print(f"신규 딜: {len(new_deals)}개 (기존: {len(all_deals) - len(new_deals)}개 중복 제외)")
+    print(f"신규 딜: {len(new_deals)}개 | 이미 확인한 딜: {len(seen_deals)}개")
 
     if not new_deals:
         print("새로운 딜이 없습니다. 종료합니다.")
@@ -103,8 +104,6 @@ async def run(dry_run: bool = False, force_notify: bool = False) -> None:
     print("\n[신규 딜 목록]")
     for deal in new_deals:
         print(f"  [{deal.source}] {deal.title}")
-        if deal.price:
-            print(f"    가격: {deal.price}")
         if deal.url:
             print(f"    URL: {deal.url}")
 
@@ -128,7 +127,7 @@ async def run(dry_run: bool = False, force_notify: bool = False) -> None:
         smtp_password=gmail_password,
         to_email=gmail_to,
     )
-    notifier.send(new_deals)
+    notifier.send(new_deals, seen_deals)
 
     # seen_deals 업데이트
     seen_ids.update(d.id for d in new_deals)
