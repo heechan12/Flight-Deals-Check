@@ -24,6 +24,7 @@ class Deal:
     deadline: Optional[str] = None   # 예약 마감일
     discount: Optional[str] = None   # 할인율/금액
     extra: Optional[str] = None      # 기타 정보
+    published_at: Optional[str] = None  # 기사 실제 게시일 (YYYY-MM-DD)
     found_at: str = field(default_factory=lambda: datetime.now().isoformat())
     id: str = field(init=False)
 
@@ -153,21 +154,22 @@ class NewsRssScraper(BaseScraper):
                 if not any(kw in title_text for kw in self.include_keywords):
                     continue
 
+                pub_dt_parsed = None
                 if pub_date:
                     try:
-                        pub_dt = parsedate_to_datetime(pub_date.text)
-                        if pub_dt.tzinfo is None:
-                            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                        if datetime.now(timezone.utc) - pub_dt > timedelta(days=self.max_age_days):
+                        pub_dt_parsed = parsedate_to_datetime(pub_date.text)
+                        if pub_dt_parsed.tzinfo is None:
+                            pub_dt_parsed = pub_dt_parsed.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) - pub_dt_parsed > timedelta(days=self.max_age_days):
                             continue
                     except Exception:
-                        pass
+                        pub_dt_parsed = None
 
                 source_name = source.text.strip() if source else ""
                 deals.append(self._make_deal(
                     title=title_text,
                     url=link_text,
-                    deadline=pub_date.text.strip()[:16] if pub_date else None,
+                    published_at=pub_dt_parsed.strftime("%Y-%m-%d") if pub_dt_parsed else None,
                     extra=f"출처: {source_name}" if source_name else None,
                 ))
 

@@ -5,7 +5,7 @@ Notion API를 이용한 딜 데이터베이스 등록 모듈
   - 이름   (Title)
   - 출처   (Select)
   - 링크   (URL)
-  - 발견일 (Date)
+  - 발견일 (Date): RSS 기사 게시일 (없으면 발견일)
   - 상태   (Select): 🆕 신규 / ✅ 확인완료
 
 설정 방법:
@@ -75,8 +75,8 @@ class NotionNotifier:
 
         async with httpx.AsyncClient(timeout=15) as client:
             tasks = (
-                [self._create_page(client, deal, "🆕 신규", today) for deal in new_deals]
-                + [self._create_page(client, deal, "✅ 확인완료", today) for deal in seen_deals]
+                [self._create_page(client, deal, "🆕 신규", deal.published_at or today) for deal in new_deals]
+                + [self._create_page(client, deal, "✅ 확인완료", deal.published_at or today) for deal in seen_deals]
             )
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
